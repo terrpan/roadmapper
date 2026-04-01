@@ -14,6 +14,8 @@ interface RoadmapStore extends PersistedState {
   dialogOpen: boolean;
   editingItemId: string | null;
   scopeItemId: string | null;
+  parentForNewItem: string | null;
+  directionForNewItem: 'right' | 'down' | null;
 
   // View
   setViewMode: (mode: ViewMode) => void;
@@ -28,6 +30,7 @@ interface RoadmapStore extends PersistedState {
   openCreateDialog: () => void;
   openEditDialog: (id: string) => void;
   closeDialog: () => void;
+  prepareNewItemWithParent: (parentId: string, direction?: 'right' | 'down') => void;
 
   // Items
   addItem: (title: string, description: string, status: ItemStatus, position?: { x: number; y: number }, size?: InitiativeSize, dateRange?: DateRange, parentId?: string) => string;
@@ -88,6 +91,8 @@ export const useRoadmapStore = create<RoadmapStore>((set, get) => ({
   dialogOpen: false,
   editingItemId: null,
   scopeItemId: null,
+  parentForNewItem: null,
+  directionForNewItem: null,
 
   setViewMode: (mode) => set({ viewMode: mode }),
 
@@ -97,10 +102,27 @@ export const useRoadmapStore = create<RoadmapStore>((set, get) => ({
 
   openCreateDialog: () => set({ dialogOpen: true, editingItemId: null }),
   openEditDialog: (id) => set({ dialogOpen: true, editingItemId: id }),
-  closeDialog: () => set({ dialogOpen: false, editingItemId: null }),
+  closeDialog: () => set({ dialogOpen: false, editingItemId: null, parentForNewItem: null, directionForNewItem: null }),
+
+  prepareNewItemWithParent: (parentId, direction) =>
+    set({ dialogOpen: true, editingItemId: null, parentForNewItem: parentId, directionForNewItem: direction ?? 'right' }),
 
   addItem: (title, description, status, position, size, dateRange, parentId) => {
     const id = nanoid();
+    const store = get();
+    const actualParentId = parentId ?? store.parentForNewItem ?? undefined;
+    
+    let itemPosition = position;
+    if (!itemPosition && actualParentId && store.directionForNewItem) {
+      const parent = store.items.find((item) => item.id === actualParentId);
+      if (parent) {
+        const dir = store.directionForNewItem;
+        itemPosition = dir === 'down'
+          ? { x: parent.position.x, y: parent.position.y + 200 }
+          : { x: parent.position.x + 300, y: parent.position.y };
+      }
+    }
+    
     const newItem: RoadmapItem = {
       id,
       title,
@@ -108,12 +130,23 @@ export const useRoadmapStore = create<RoadmapStore>((set, get) => ({
       status,
       size,
       dateRange,
-      parentId,
+      parentId: actualParentId,
       milestones: [],
-      position: position ?? { x: Math.random() * 400 + 100, y: Math.random() * 300 + 100 },
+      position: itemPosition ?? { x: Math.random() * 400 + 100, y: Math.random() * 300 + 100 },
     };
+    
     set((state) => {
-      const next = { ...state, items: [...state.items, newItem] };
+      const newConnections = actualParentId && store.parentForNewItem
+        ? [...state.connections, { id: nanoid(), sourceId: actualParentId, targetId: id, type: 'direct' as const }]
+        : [...state.connections];
+      
+      const next = { 
+        ...state, 
+        items: [...state.items, newItem],
+        connections: newConnections,
+        parentForNewItem: null,
+        directionForNewItem: null,
+      };
       persist(next);
       return next;
     });
@@ -121,38 +154,9 @@ export const useRoadmapStore = create<RoadmapStore>((set, get) => ({
   },
 
   addItemAndConnect: (sourceId, direction) => {
-    const store = get();
-    const source = store.items.find((item) => item.id === sourceId);
-    const dir = direction ?? 'right';
-    const position = source
-      ? dir === 'down'
-        ? { x: source.position.x, y: source.position.y + 200 }
-        : { x: source.position.x + 300, y: source.position.y }
-      : { x: Math.random() * 400 + 100, y: Math.random() * 300 + 100 };
-    const status = source?.status ?? 'planned';
-
-    const id = nanoid();
-    const newItem: RoadmapItem = {
-      id,
-      title: 'New Item',
-      description: '',
-      status,
-      milestones: [],
-      position,
-    };
-
-    set((state) => {
-      const next = {
-        ...state,
-        items: [...state.items, newItem],
-        connections: [...state.connections, { id: nanoid(), sourceId, targetId: id, type: 'direct' as const }],
-        dialogOpen: true,
-        editingItemId: id,
-      };
-      persist(next);
-      return next;
-    });
-    return id;
+    const { prepareNewItemWithParent } = get();
+    prepareNewItemWithParent(sourceId, direction);
+    return sourceId;
   },
 
   updateItem: (id, updates) =>

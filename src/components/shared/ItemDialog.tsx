@@ -143,6 +143,7 @@ export function ItemDialog() {
   const updateItem = useRoadmapStore((s) => s.updateItem);
   const closeDialog = useRoadmapStore((s) => s.closeDialog);
   const scopeItemId = useRoadmapStore((s) => s.scopeItemId);
+  const parentForNewItem = useRoadmapStore((s) => s.parentForNewItem);
 
   const editingItem = editingItemId ? items.find((i) => i.id === editingItemId) : null;
 
@@ -190,10 +191,10 @@ export function ItemDialog() {
       setDescription('');
       setStatus('backlog');
       setSize('');
-      setParentId(scopeItemId ?? '');
+      setParentId(parentForNewItem ?? scopeItemId ?? '');
       resetDateFields();
     }
-  }, [editingItem, dialogOpen, scopeItemId]);
+  }, [editingItem, dialogOpen, scopeItemId, parentForNewItem]);
 
   const parentItem = parentId ? items.find((i) => i.id === parentId) : null;
   const parentDateRange = parentItem
