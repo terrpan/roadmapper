@@ -12,7 +12,6 @@ import {
   type OnNodesChange,
   type OnConnect,
   type NodeTypes,
-  type NodeDragHandler,
   type Viewport,
   applyNodeChanges,
   MarkerType,
@@ -817,11 +816,11 @@ export function CanvasView() {
     [snapEnabled, scopedItems]
   );
 
-  const onNodeDragStop: NodeDragHandler = useCallback((_event, _node, draggedNodes) => {
+  const onNodeDragStop = useCallback((_event: any, _node: any, draggedNodes: any[]) => {
     setSnapLines({ horizontal: [], vertical: [] });
     // Persist final positions to the API in a single batch call
     batchUpdatePositions(
-      draggedNodes.map((n) => ({ id: n.id, position: n.position }))
+      draggedNodes.map((n: any) => ({ id: n.id, position: n.position }))
     );
   }, [batchUpdatePositions]);
 
