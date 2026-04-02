@@ -6,6 +6,7 @@ import { CanvasView } from './components/canvas/CanvasView';
 import { KanbanView } from './components/kanban/KanbanView';
 import GanttView from './components/gantt/GanttView';
 import { ItemDialog } from './components/shared/ItemDialog';
+import { DataMigrationBanner } from './components/shared/DataMigrationBanner';
 import { useRoadmapStore } from './store/roadmapStore';
 
 export default function App() {
@@ -15,6 +16,7 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen">
       <Header />
+      <DataMigrationBanner />
       <div className="flex flex-1 overflow-hidden">
         <NavigationPane />
         <main className="flex-1 flex flex-col overflow-hidden bg-gray-50">

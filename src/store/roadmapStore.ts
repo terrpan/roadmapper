@@ -1,11 +1,14 @@
 import { create } from 'zustand';
 import { nanoid } from 'nanoid';
-import type { RoadmapItem, Connection, ConnectionType, Milestone, ItemStatus, InitiativeSize, DateRange, ViewMode } from '../types';
-import { loadFromStorage, saveToStorage } from '../lib/storage';
+import type { RoadmapItem, Connection, ConnectionType, Milestone, ItemStatus, InitiativeSize, DateRange, ViewMode, Group } from '../types';
+import { GROUP_COLORS, getItemDepth } from '../types';
+import { getStorageAdapter } from '../lib/storageAdapter';
+import type { StorageAdapter } from '../lib/storageAdapter';
 
 interface PersistedState {
   items: RoadmapItem[];
   connections: Connection[];
+  groups: Group[];
 }
 
 interface RoadmapStore extends PersistedState {
@@ -16,6 +19,9 @@ interface RoadmapStore extends PersistedState {
   scopeItemId: string | null;
   parentForNewItem: string | null;
   directionForNewItem: 'right' | 'down' | null;
+  selectedNodeIds: string[];
+  searchQuery: string;
+  connectingFrom: { nodeId: string; type: ConnectionType } | null;
 
   // View
   setViewMode: (mode: ViewMode) => void;
@@ -25,6 +31,13 @@ interface RoadmapStore extends PersistedState {
 
   // Selection
   selectItem: (id: string | null) => void;
+  setSelectedNodeIds: (ids: string[]) => void;
+
+  // Search
+  setSearchQuery: (query: string) => void;
+
+  // Connect mode (one-shot: pick a target node)
+  setConnectingFromNode: (id: string | null, type?: ConnectionType) => void;
 
   // Dialog
   openCreateDialog: () => void;
@@ -55,12 +68,32 @@ interface RoadmapStore extends PersistedState {
   addMilestone: (itemId: string, title: string) => void;
   removeMilestone: (itemId: string, milestoneId: string) => void;
   toggleMilestone: (itemId: string, milestoneId: string) => void;
+
+  // Groups
+  addGroup: (label: string, itemIds: string[]) => string;
+  updateGroup: (id: string, updates: Partial<Omit<Group, 'id'>>) => void;
+  deleteGroup: (id: string) => void;
+  removeItemFromGroup: (groupId: string, itemId: string) => void;
+  addItemsToGroup: (groupId: string, itemIds: string[]) => void;
+
+  // Import
+  importData: (data: { items: RoadmapItem[]; connections: Connection[]; groups?: Group[] }, mode: 'replace' | 'merge') => void;
+
+  // Initialization
+  _initialized: boolean;
+  initializeFromStorage: () => Promise<void>;
 }
 
-const persisted = loadFromStorage<PersistedState>() ?? { items: [], connections: [] };
+const initialState: PersistedState = { items: [], connections: [], groups: [] };
 
-function persist(state: PersistedState) {
-  saveToStorage({ items: state.items, connections: state.connections });
+// Fire-and-forget async sync to storage adapter
+function syncToAdapter(fn: (adapter: StorageAdapter) => Promise<void>) {
+  try {
+    const adapter = getStorageAdapter();
+    fn(adapter).catch((err) => console.error('Storage sync failed:', err));
+  } catch {
+    // Adapter not initialized yet — ignore
+  }
 }
 
 // Cascading completion: when an item is marked 'done', mark all downstream children as 'done' too
@@ -84,8 +117,10 @@ function cascadeCompletion(items: RoadmapItem[], connections: Connection[], chan
 }
 
 export const useRoadmapStore = create<RoadmapStore>((set, get) => ({
-  items: persisted.items,
-  connections: persisted.connections,
+  items: initialState.items,
+  connections: initialState.connections,
+  groups: initialState.groups,
+  _initialized: false,
   viewMode: 'canvas',
   selectedItemId: null,
   dialogOpen: false,
@@ -93,12 +128,26 @@ export const useRoadmapStore = create<RoadmapStore>((set, get) => ({
   scopeItemId: null,
   parentForNewItem: null,
   directionForNewItem: null,
+  selectedNodeIds: [],
+  searchQuery: '',
+  connectingFrom: null,
+
+  initializeFromStorage: async () => {
+    const adapter = getStorageAdapter();
+    const data = await adapter.loadAll();
+    set({ items: data.items, connections: data.connections, groups: data.groups, _initialized: true });
+  },
 
   setViewMode: (mode) => set({ viewMode: mode }),
 
   setScopeItem: (id) => set({ scopeItemId: id }),
 
   selectItem: (id) => set({ selectedItemId: id }),
+  setSelectedNodeIds: (ids) => set({ selectedNodeIds: ids }),
+
+  setSearchQuery: (query) => set({ searchQuery: query }),
+  setConnectingFromNode: (id, type = 'direct') =>
+    set({ connectingFrom: id ? { nodeId: id, type } : null }),
 
   openCreateDialog: () => set({ dialogOpen: true, editingItemId: null }),
   openEditDialog: (id) => set({ dialogOpen: true, editingItemId: id }),
@@ -111,15 +160,39 @@ export const useRoadmapStore = create<RoadmapStore>((set, get) => ({
     const id = nanoid();
     const store = get();
     const actualParentId = parentId ?? store.parentForNewItem ?? undefined;
-    
+
+    // Node dimensions (approximate)
+    const NODE_W = 220;
+    const NODE_H = 120;
+
     let itemPosition = position;
     if (!itemPosition && actualParentId && store.directionForNewItem) {
       const parent = store.items.find((item) => item.id === actualParentId);
       if (parent) {
         const dir = store.directionForNewItem;
-        itemPosition = dir === 'down'
-          ? { x: parent.position.x, y: parent.position.y + 200 }
-          : { x: parent.position.x + 300, y: parent.position.y };
+        const siblings = store.items.filter((item) => item.parentId === actualParentId);
+
+        if (dir === 'down') {
+          // Children go in a row below the parent, spreading right
+          const childY = parent.position.y + NODE_H + 80;
+          if (siblings.length === 0) {
+            itemPosition = { x: parent.position.x, y: childY };
+          } else {
+            // Place to the right of the rightmost sibling at child row Y
+            const rightmost = siblings.reduce((a, b) => (a.position.x > b.position.x ? a : b));
+            itemPosition = { x: rightmost.position.x + NODE_W + 40, y: childY };
+          }
+        } else {
+          // Children go in a column to the right of the parent, spreading down
+          const childX = parent.position.x + NODE_W + 80;
+          if (siblings.length === 0) {
+            itemPosition = { x: childX, y: parent.position.y };
+          } else {
+            // Place below the bottommost sibling at child column X
+            const bottommost = siblings.reduce((a, b) => (a.position.y > b.position.y ? a : b));
+            itemPosition = { x: childX, y: bottommost.position.y + NODE_H + 40 };
+          }
+        }
       }
     }
     
@@ -136,19 +209,22 @@ export const useRoadmapStore = create<RoadmapStore>((set, get) => ({
     };
     
     set((state) => {
-      const newConnections = actualParentId && store.parentForNewItem
-        ? [...state.connections, { id: nanoid(), sourceId: actualParentId, targetId: id, type: 'direct' as const }]
-        : [...state.connections];
-      
-      const next = { 
+      const parentConnection = actualParentId
+        ? { id: nanoid(), sourceId: actualParentId, targetId: id, type: 'direct' as const }
+        : null;
+
+      syncToAdapter(async (adapter) => {
+        await adapter.saveItem(newItem);
+        if (parentConnection) await adapter.saveConnection(parentConnection);
+      });
+
+      return { 
         ...state, 
         items: [...state.items, newItem],
-        connections: newConnections,
+        connections: parentConnection ? [...state.connections, parentConnection] : state.connections,
         parentForNewItem: null,
         directionForNewItem: null,
       };
-      persist(next);
-      return next;
     });
     return id;
   },
@@ -165,9 +241,8 @@ export const useRoadmapStore = create<RoadmapStore>((set, get) => ({
       if (updates.status) {
         items = cascadeCompletion(items, state.connections, id, updates.status);
       }
-      const next = { ...state, items };
-      persist(next);
-      return next;
+      syncToAdapter(async (adapter) => { await adapter.updateItem(id, updates); });
+      return { ...state, items };
     }),
 
   deleteItem: (id) =>
@@ -180,20 +255,20 @@ export const useRoadmapStore = create<RoadmapStore>((set, get) => ({
           .filter((item) => item.id !== id)
           .map((item) => item.parentId === id ? { ...item, parentId: newParentId } : item),
         connections: state.connections.filter((c) => c.sourceId !== id && c.targetId !== id),
+        groups: state.groups
+          .map((g) => g.itemIds.includes(id) ? { ...g, itemIds: g.itemIds.filter((iid) => iid !== id) } : g)
+          .filter((g) => g.itemIds.length > 0),
         selectedItemId: state.selectedItemId === id ? null : state.selectedItemId,
       };
-      persist(next);
+      syncToAdapter(async (adapter) => { await adapter.deleteItem(id); });
       return next;
     }),
 
   updateItemPosition: (id, position) => {
-    const store = get();
-    const next = {
-      items: store.items.map((item) => (item.id === id ? { ...item, position } : item)),
-      connections: store.connections,
-    };
-    persist(next);
-    set({ items: next.items });
+    syncToAdapter(async (adapter) => { await adapter.updateItemPosition(id, position); });
+    set((state) => ({
+      items: state.items.map((item) => (item.id === id ? { ...item, position } : item)),
+    }));
   },
 
   batchUpdatePositions: (updates) => {
@@ -205,7 +280,7 @@ export const useRoadmapStore = create<RoadmapStore>((set, get) => ({
           posMap.has(item.id) ? { ...item, position: posMap.get(item.id)! } : item
         ),
       };
-      persist(next);
+      syncToAdapter(async (adapter) => { await adapter.batchUpdatePositions(updates); });
       return next;
     });
   },
@@ -214,9 +289,8 @@ export const useRoadmapStore = create<RoadmapStore>((set, get) => ({
     set((state) => {
       let items = state.items.map((item) => (item.id === id ? { ...item, status } : item));
       items = cascadeCompletion(items, state.connections, id, status);
-      const next = { ...state, items };
-      persist(next);
-      return next;
+      syncToAdapter(async (adapter) => { await adapter.updateItemStatus(id, status); });
+      return { ...state, items };
     }),
 
   setParent: (itemId, parentId) =>
@@ -227,33 +301,49 @@ export const useRoadmapStore = create<RoadmapStore>((set, get) => ({
           item.id === itemId ? { ...item, parentId: parentId ?? undefined } : item
         ),
       };
-      persist(next);
+      syncToAdapter(async (adapter) => { await adapter.updateItem(itemId, { parentId: parentId ?? undefined }); });
       return next;
     }),
 
   addConnection: (sourceId, targetId, label, type) =>
     set((state) => {
+      // Blocking connections only allowed between items at the same hierarchy depth
+      if (type === 'blocking') {
+        const srcDepth = getItemDepth(state.items, sourceId);
+        const tgtDepth = getItemDepth(state.items, targetId);
+        if (srcDepth !== tgtDepth) return state;
+      }
+      // Allow multiple connections between same nodes only if they have different types
       const exists = state.connections.some(
-        (c) => c.sourceId === sourceId && c.targetId === targetId
+        (c) => c.sourceId === sourceId && c.targetId === targetId && (c.type ?? 'direct') === (type ?? 'direct')
       );
       if (exists) return state;
-      const next = {
+      const newConnection = { id: nanoid(), sourceId, targetId, label, type: type ?? 'direct' };
+      syncToAdapter(async (adapter) => { await adapter.saveConnection(newConnection); });
+      return {
         ...state,
-        connections: [...state.connections, { id: nanoid(), sourceId, targetId, label, type: type ?? 'direct' }],
+        connections: [...state.connections, newConnection],
       };
-      persist(next);
-      return next;
     }),
 
   updateConnectionType: (connectionId, type) =>
     set((state) => {
+      // Blocking connections only allowed between items at the same hierarchy depth
+      if (type === 'blocking') {
+        const conn = state.connections.find((c) => c.id === connectionId);
+        if (conn) {
+          const srcDepth = getItemDepth(state.items, conn.sourceId);
+          const tgtDepth = getItemDepth(state.items, conn.targetId);
+          if (srcDepth !== tgtDepth) return state;
+        }
+      }
       const next = {
         ...state,
         connections: state.connections.map((c) =>
           c.id === connectionId ? { ...c, type } : c
         ),
       };
-      persist(next);
+      syncToAdapter(async (adapter) => { await adapter.updateConnection(connectionId, { type }); });
       return next;
     }),
 
@@ -263,22 +353,22 @@ export const useRoadmapStore = create<RoadmapStore>((set, get) => ({
         ...state,
         connections: state.connections.filter((c) => c.id !== id),
       };
-      persist(next);
+      syncToAdapter(async (adapter) => { await adapter.deleteConnection(id); });
       return next;
     }),
 
   addMilestone: (itemId, title) =>
     set((state) => {
-      const next = {
+      const milestone = { id: nanoid(), title, completed: false };
+      syncToAdapter(async (adapter) => { await adapter.saveMilestone(itemId, milestone); });
+      return {
         ...state,
         items: state.items.map((item) =>
           item.id === itemId
-            ? { ...item, milestones: [...item.milestones, { id: nanoid(), title, completed: false }] }
+            ? { ...item, milestones: [...item.milestones, milestone] }
             : item
         ),
       };
-      persist(next);
-      return next;
     }),
 
   removeMilestone: (itemId, milestoneId) =>
@@ -291,7 +381,7 @@ export const useRoadmapStore = create<RoadmapStore>((set, get) => ({
             : item
         ),
       };
-      persist(next);
+      syncToAdapter(async (adapter) => { await adapter.deleteMilestone(itemId, milestoneId); });
       return next;
     }),
 
@@ -310,7 +400,103 @@ export const useRoadmapStore = create<RoadmapStore>((set, get) => ({
             : item
         ),
       };
-      persist(next);
+      syncToAdapter(async (adapter) => { await adapter.toggleMilestone(itemId, milestoneId); });
       return next;
     }),
+
+  // Groups
+  addGroup: (label, itemIds) => {
+    const id = nanoid();
+    set((state) => {
+      const usedColors = new Set(state.groups.map((g) => g.colorIndex));
+      let colorIndex = 0;
+      for (let i = 0; i < GROUP_COLORS.length; i++) {
+        if (!usedColors.has(i)) { colorIndex = i; break; }
+      }
+      const newGroup = { id, label, colorIndex, itemIds };
+      syncToAdapter(async (adapter) => { await adapter.saveGroup(newGroup); });
+      return {
+        ...state,
+        groups: [...state.groups, newGroup],
+      };
+    });
+    return id;
+  },
+
+  updateGroup: (id, updates) =>
+    set((state) => {
+      const next = {
+        ...state,
+        groups: state.groups.map((g) => (g.id === id ? { ...g, ...updates } : g)),
+      };
+      syncToAdapter(async (adapter) => { await adapter.updateGroup(id, updates); });
+      return next;
+    }),
+
+  deleteGroup: (id) =>
+    set((state) => {
+      const next = {
+        ...state,
+        groups: state.groups.filter((g) => g.id !== id),
+      };
+      syncToAdapter(async (adapter) => { await adapter.deleteGroup(id); });
+      return next;
+    }),
+
+  removeItemFromGroup: (groupId, itemId) =>
+    set((state) => {
+      const next = {
+        ...state,
+        groups: state.groups
+          .map((g) => (g.id === groupId ? { ...g, itemIds: g.itemIds.filter((iid) => iid !== itemId) } : g))
+          .filter((g) => g.itemIds.length > 0),
+      };
+      syncToAdapter(async (adapter) => { await adapter.removeItemFromGroup(groupId, itemId); });
+      return next;
+    }),
+
+  addItemsToGroup: (groupId, itemIds) =>
+    set((state) => {
+      const next = {
+        ...state,
+        groups: state.groups.map((g) =>
+          g.id === groupId
+            ? { ...g, itemIds: [...new Set([...g.itemIds, ...itemIds])] }
+            : g
+        ),
+      };
+      syncToAdapter(async (adapter) => { await adapter.addItemsToGroup(groupId, itemIds); });
+      return next;
+    }),
+
+  importData: (data, mode) => {
+    set((state) => {
+      let next: PersistedState;
+      if (mode === 'replace') {
+        next = {
+          ...state,
+          items: data.items,
+          connections: data.connections,
+          groups: data.groups ?? [],
+        };
+      } else {
+        // Merge: add new items/connections, skip duplicates by id
+        const existingItemIds = new Set(state.items.map((i) => i.id));
+        const existingConnIds = new Set(state.connections.map((c) => c.id));
+        const existingGroupIds = new Set(state.groups.map((g) => g.id));
+        next = {
+          ...state,
+          items: [...state.items, ...data.items.filter((i) => !existingItemIds.has(i.id))],
+          connections: [...state.connections, ...data.connections.filter((c) => !existingConnIds.has(c.id))],
+          groups: [...state.groups, ...(data.groups ?? []).filter((g) => !existingGroupIds.has(g.id))],
+        };
+      }
+      return next;
+    });
+    // Sync to adapter and reload canonical state
+    syncToAdapter(async (adapter) => {
+      const result = await adapter.importData({ ...data, groups: data.groups ?? [] }, mode);
+      set({ items: result.items, connections: result.connections, groups: result.groups });
+    });
+  },
 }));

@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS group_items;
+DROP TABLE IF EXISTS groups;

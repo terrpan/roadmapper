@@ -144,6 +144,8 @@ export function ItemDialog() {
   const closeDialog = useRoadmapStore((s) => s.closeDialog);
   const scopeItemId = useRoadmapStore((s) => s.scopeItemId);
   const parentForNewItem = useRoadmapStore((s) => s.parentForNewItem);
+  const directionForNewItem = useRoadmapStore((s) => s.directionForNewItem);
+  const prepareNewItemWithParent = useRoadmapStore((s) => s.prepareNewItemWithParent);
 
   const editingItem = editingItemId ? items.find((i) => i.id === editingItemId) : null;
 
@@ -231,9 +233,8 @@ export function ItemDialog() {
     resetDateFields();
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim()) return;
+  const handleSave = () => {
+    if (!title.trim()) return false;
 
     const dateRange = buildDateRange(size, startDate, endDate, startYear, startQuarter, endYear, endQuarter);
 
@@ -241,7 +242,7 @@ export function ItemDialog() {
       const violation = getDateRangeViolation(dateRange, parentDateRange);
       if (violation) {
         setDateWarning(violation);
-        return;
+        return false;
       }
     }
 
@@ -257,7 +258,30 @@ export function ItemDialog() {
     } else {
       addItem(title.trim(), description.trim(), status, undefined, size || undefined, dateRange, parentId || undefined);
     }
-    closeDialog();
+    return true;
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (handleSave()) {
+      closeDialog();
+    }
+  };
+
+  const handleCreateAnother = () => {
+    if (!handleSave()) return;
+    // Re-establish parent context so next item also gets connection + positioning
+    const savedParentId = parentId;
+    const savedDirection = directionForNewItem;
+    if (savedParentId) {
+      prepareNewItemWithParent(savedParentId, savedDirection ?? 'down');
+    }
+    // Reset only title and description — keep parent, status, size inherited
+    setTitle('');
+    setDescription('');
+    setDateWarning(null);
+    resetDateFields();
+    setParentId(savedParentId);
   };
 
   const renderDatePickers = () => {
@@ -495,6 +519,15 @@ export function ItemDialog() {
             >
               Cancel
             </button>
+            {!editingItem && (
+              <button
+                type="button"
+                onClick={handleCreateAnother}
+                className="rounded-lg border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
+              >
+                Create &amp; Add Another
+              </button>
+            )}
             <button
               type="submit"
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"

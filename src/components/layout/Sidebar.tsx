@@ -1,4 +1,4 @@
-import { formatDateRange, getItemDepth, getHierarchyLabel, getHierarchyColor } from '../../types';
+import { formatDateRange, getItemDepth, getHierarchyLabel, getHierarchyColor, type ConnectionType } from '../../types';
 import { useRoadmapStore } from '../../store/roadmapStore';
 import { MilestoneList } from '../shared/MilestoneList';
 
@@ -9,6 +9,75 @@ const STATUS_COLORS: Record<string, string> = {
   done: 'bg-green-100 text-green-700',
 };
 
+const CONNECTION_TYPES: { type: ConnectionType; icon: string; label: string; desc: string; active: string; inactive: string }[] = [
+  {
+    type: 'direct',
+    icon: '🔗',
+    label: 'Direct',
+    desc: 'Hard dependency — this item must come before the next',
+    active: 'bg-indigo-100 text-indigo-700 border-indigo-300',
+    inactive: 'bg-white text-gray-400 border-gray-200 hover:border-indigo-200 hover:text-indigo-500',
+  },
+  {
+    type: 'indirect',
+    icon: '↗',
+    label: 'Indirect',
+    desc: 'Loose relationship — related but not a hard dependency',
+    active: 'bg-gray-100 text-gray-700 border-gray-400',
+    inactive: 'bg-white text-gray-400 border-gray-200 hover:border-gray-400 hover:text-gray-600',
+  },
+  {
+    type: 'blocking',
+    icon: '🚫',
+    label: 'Blocking',
+    desc: 'Hard blocker — the other item cannot start until this is done',
+    active: 'bg-red-100 text-red-700 border-red-300',
+    inactive: 'bg-white text-gray-400 border-gray-200 hover:border-red-200 hover:text-red-500',
+  },
+];
+
+function TypePicker({
+  value,
+  canBlock,
+  onChange,
+}: {
+  value: ConnectionType;
+  canBlock: boolean;
+  onChange: (type: ConnectionType) => void;
+}) {
+  return (
+    <div className="flex gap-1">
+      {CONNECTION_TYPES.map((opt) => {
+        const disabled = opt.type === 'blocking' && !canBlock;
+        const isActive = value === opt.type;
+        return (
+          <div key={opt.type} className="group/tip relative">
+            <button
+              onClick={() => !disabled && onChange(opt.type)}
+              disabled={disabled}
+              className={`text-[10px] font-medium px-1.5 py-0.5 rounded border transition-colors ${
+                disabled
+                  ? 'opacity-30 cursor-not-allowed bg-white text-gray-300 border-gray-200'
+                  : isActive
+                    ? opt.active
+                    : opt.inactive
+              }`}
+            >
+              {opt.icon} {opt.label}
+            </button>
+            <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:block z-50 w-48 bg-gray-900 text-white text-xs rounded-md px-2.5 py-2 shadow-lg pointer-events-none">
+              <p className="font-semibold mb-0.5">{opt.icon} {opt.label}</p>
+              <p className="text-gray-300 leading-snug">{opt.desc}</p>
+              {disabled && <p className="text-amber-300 mt-1 leading-snug">Only available between items at the same hierarchy level.</p>}
+              <span className="absolute top-full left-3 border-4 border-transparent border-t-gray-900" />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function Sidebar() {
   const selectedItemId = useRoadmapStore((s) => s.selectedItemId);
   const items = useRoadmapStore((s) => s.items);
@@ -17,6 +86,7 @@ export function Sidebar() {
   const deleteItem = useRoadmapStore((s) => s.deleteItem);
   const selectItem = useRoadmapStore((s) => s.selectItem);
   const updateConnectionType = useRoadmapStore((s) => s.updateConnectionType);
+  const removeConnection = useRoadmapStore((s) => s.removeConnection);
 
   const item = items.find((i) => i.id === selectedItemId);
 
@@ -79,7 +149,15 @@ export function Sidebar() {
               {parent.title}
             </button>
           </div>
-        ) : null;
+        ) : (
+          <div className="mb-3 flex items-start gap-1.5 rounded-md bg-amber-50 border border-amber-300 px-2.5 py-2">
+            <span className="text-amber-500 mt-0.5 shrink-0">⚠️</span>
+            <div>
+              <p className="text-xs font-semibold text-amber-800">Orphaned item</p>
+              <p className="text-[11px] text-amber-700 mt-0.5">Parent no longer exists. Reassign a parent or delete this item.</p>
+            </div>
+          </div>
+        );
       })()}
 
       {(() => {
@@ -112,38 +190,66 @@ export function Sidebar() {
           {incoming.map((c) => {
             const source = items.find((i) => i.id === c.sourceId);
             const connType = c.type ?? 'direct';
+            const isIncomingBlock = connType === 'blocking';
             return (
-              <div key={c.id} className="flex items-center gap-1.5 text-xs text-gray-500 mb-1">
-                <span>← from <span className="font-medium text-gray-700">{source?.title ?? '?'}</span></span>
-                <button
-                  onClick={() => updateConnectionType(c.id, connType === 'direct' ? 'indirect' : 'direct')}
-                  className={`text-[10px] px-1.5 py-0.5 rounded ${
-                    connType === 'indirect'
-                      ? 'border border-dashed border-gray-400 text-gray-500'
-                      : 'bg-indigo-100 text-indigo-700'
-                  }`}
-                >
-                  {connType === 'indirect' ? 'Indirect' : 'Direct'}
-                </button>
+              <div key={c.id} className="mb-2.5 text-xs text-gray-500">
+                <div className="flex items-center gap-1 mb-1">
+                  <span className="text-gray-400">←</span>
+                  <span className="font-medium text-gray-700 truncate flex-1">{source?.title ?? '?'}</span>
+                  {!isIncomingBlock && (
+                    <button
+                      onClick={() => removeConnection(c.id)}
+                      className="shrink-0 text-gray-300 hover:text-red-500 transition-colors leading-none"
+                      title="Remove connection"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                {isIncomingBlock ? (
+                  <div className="group relative inline-flex">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 border border-red-300 cursor-help">
+                      🚫 Blocking (read-only)
+                    </span>
+                    <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover:block z-50 w-48 bg-gray-900 text-white text-xs rounded-md px-2.5 py-2 shadow-lg pointer-events-none">
+                      <p className="font-semibold text-red-300 mb-0.5">Blocked by this item</p>
+                      <p className="text-gray-300 leading-snug">Only the source item can change or remove a blocking connection.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <TypePicker
+                    value={connType}
+                    canBlock={false}
+                    onChange={(t) => updateConnectionType(c.id, t)}
+                  />
+                )}
               </div>
             );
           })}
           {outgoing.map((c) => {
             const target = items.find((i) => i.id === c.targetId);
             const connType = c.type ?? 'direct';
+            const srcDepth = getItemDepth(items, c.sourceId);
+            const tgtDepth = getItemDepth(items, c.targetId);
+            const canBlock = srcDepth === tgtDepth;
             return (
-              <div key={c.id} className="flex items-center gap-1.5 text-xs text-gray-500 mb-1">
-                <span>→ to <span className="font-medium text-gray-700">{target?.title ?? '?'}</span></span>
-                <button
-                  onClick={() => updateConnectionType(c.id, connType === 'direct' ? 'indirect' : 'direct')}
-                  className={`text-[10px] px-1.5 py-0.5 rounded ${
-                    connType === 'indirect'
-                      ? 'border border-dashed border-gray-400 text-gray-500'
-                      : 'bg-indigo-100 text-indigo-700'
-                  }`}
-                >
-                  {connType === 'indirect' ? 'Indirect' : 'Direct'}
-                </button>
+              <div key={c.id} className="mb-2.5 text-xs text-gray-500">
+                <div className="flex items-center gap-1 mb-1">
+                  <span className="text-gray-400">→</span>
+                  <span className="font-medium text-gray-700 truncate flex-1">{target?.title ?? '?'}</span>
+                  <button
+                    onClick={() => removeConnection(c.id)}
+                    className="shrink-0 text-gray-300 hover:text-red-500 transition-colors leading-none"
+                    title="Remove connection"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <TypePicker
+                  value={connType}
+                  canBlock={canBlock}
+                  onChange={(t) => updateConnectionType(c.id, t)}
+                />
               </div>
             );
           })}

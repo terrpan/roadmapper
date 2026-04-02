@@ -1,12 +1,17 @@
 import { useState } from 'react';
 import { useRoadmapStore } from '../../store/roadmapStore';
-import { getItemChildren, getHierarchyLabel, getHierarchyColor } from '../../types';
+import { getItemChildren, getHierarchyLabel, getHierarchyColor, GROUP_COLORS } from '../../types';
 import type { RoadmapItem } from '../../types';
 
 export default function NavigationPane() {
   const items = useRoadmapStore((s) => s.items);
   const scopeItemId = useRoadmapStore((s) => s.scopeItemId);
   const setScopeItem = useRoadmapStore((s) => s.setScopeItem);
+  const groups = useRoadmapStore((s) => s.groups);
+  const setSelectedNodeIds = useRoadmapStore((s) => s.setSelectedNodeIds);
+  const deleteGroup = useRoadmapStore((s) => s.deleteGroup);
+  const updateGroup = useRoadmapStore((s) => s.updateGroup);
+  const [colorPickerOpen, setColorPickerOpen] = useState<string | null>(null);
 
   const rootItems = items.filter((i) => !i.parentId);
 
@@ -35,6 +40,63 @@ export default function NavigationPane() {
         {rootItems.map((item) => (
           <NavItem key={item.id} item={item} items={items} depth={0} />
         ))}
+
+        {/* Groups section */}
+        <div className="border-t border-gray-200 mt-2 pt-2">
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide px-2 mb-1">
+            Groups
+          </h3>
+
+          {groups.length === 0 ? (
+            <p className="text-xs text-gray-400 px-2 py-1">No groups yet</p>
+          ) : (
+            groups.map((group) => (
+              <div key={group.id} className="relative">
+                <div
+                  className="group/row flex items-center gap-1.5 px-2 py-1.5 rounded text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+                  onClick={() => setSelectedNodeIds(group.itemIds)}
+                >
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setColorPickerOpen(colorPickerOpen === group.id ? null : group.id);
+                    }}
+                    className="w-3 h-3 rounded-full shrink-0 border border-gray-300 hover:scale-125 transition-transform"
+                    style={{ backgroundColor: GROUP_COLORS[group.colorIndex % GROUP_COLORS.length].border }}
+                    title="Change color"
+                  />
+                  <span className="flex-1 truncate">{group.label}</span>
+                  <span className="text-[10px] text-gray-400 tabular-nums shrink-0">
+                    {group.itemIds.length}
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteGroup(group.id);
+                    }}
+                    className="text-gray-300 hover:text-red-500 text-xs w-4 text-center opacity-0 group-hover/row:opacity-100 transition-opacity shrink-0"
+                    title="Ungroup"
+                  >
+                    ✕
+                  </button>
+                </div>
+                {colorPickerOpen === group.id && (
+                  <div className="flex gap-1 px-2 py-1.5 bg-gray-50 rounded ml-2">
+                    {GROUP_COLORS.map((c, i) => (
+                      <button
+                        key={i}
+                        onClick={() => { updateGroup(group.id, { colorIndex: i }); setColorPickerOpen(null); }}
+                        className={`w-5 h-5 rounded-full border-2 transition-transform hover:scale-110 ${group.colorIndex === i ? 'border-gray-800 scale-110' : 'border-transparent'}`}
+                        style={{ backgroundColor: c.border }}
+                        title={c.label}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );

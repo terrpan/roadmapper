@@ -1,73 +1,93 @@
-# React + TypeScript + Vite
+# Roadmapper
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A visual roadmap planning tool built with React, TypeScript, and Zustand. Supports canvas, Kanban, and Gantt views for managing initiatives with connections, groups, and milestones.
 
-Currently, two official plugins are available:
+## Deployment Modes
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+### Static (GitHub Pages)
 
-## React Compiler
+No backend required. Data persists in `localStorage`.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run build
+# Deploy dist/ to any static host
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Or for local development:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run dev
 ```
+
+### Full (Docker Compose)
+
+Uses PostgreSQL with Row Level Security for multi-tenant persistent storage.
+
+```bash
+cp .env.example .env    # Edit credentials as needed
+make dev                # Starts PostgreSQL + Go API + Vite dev server
+```
+
+The frontend auto-detects the API at `/api/health` on startup. You can force the mode with:
+
+```
+VITE_STORAGE_MODE=api   # Force API mode
+VITE_STORAGE_MODE=local # Force localStorage mode
+```
+
+### Mode Auto-Detection
+
+| Condition | Mode | Storage |
+|-----------|------|---------|
+| `/api/health` responds | API | PostgreSQL via Go server |
+| No API available | Local | `localStorage` (demo) |
+| `VITE_STORAGE_MODE` set | Forced | As specified |
+
+When switching from local → API mode, a migration banner offers to import your localStorage data into the database.
+
+## Development
+
+```bash
+make dev          # Full stack: Docker + Go API + Vite
+make dev-static   # Frontend only (localStorage mode)
+make migrate-up   # Run database migrations
+make migrate-down # Rollback last migration
+make sqlc         # Regenerate Go code from SQL queries
+make build        # Build Go binary
+make test         # Run Go tests
+```
+
+### Project Structure
+
+```
+├── src/                    # React frontend (Vite + Zustand)
+│   ├── lib/
+│   │   ├── storageAdapter.ts  # StorageAdapter interface + factory
+│   │   ├── storage.ts         # localStorage adapter (@deprecated)
+│   │   └── api.ts             # API client adapter
+│   └── store/
+│       └── roadmapStore.ts    # Zustand store (uses StorageAdapter)
+├── api/                    # Go backend
+│   ├── cmd/server/         # Entry point
+│   ├── internal/
+│   │   ├── handler/        # HTTP handlers (items, connections, groups, milestones)
+│   │   ├── middleware/      # Tenant RLS + CORS
+│   │   ├── server/         # Server setup + routing
+│   │   └── db/             # sqlc queries + generated code
+│   └── migrations/         # SQL migration files (golang-migrate)
+├── docker-compose.yml      # PostgreSQL + Go API
+├── Makefile                # Task runner
+└── .env.example            # Environment variable template
+```
+
+### Multi-Tenancy
+
+The database uses Row Level Security (RLS) with `tenant_id` on every table. The Go API sets `SET LOCAL app.current_tenant_id` per transaction. No auth is implemented yet — the default tenant is used automatically. When auth is added, the middleware just needs to resolve tenant from the auth token.
+
+### Tech Stack
+
+- **Frontend**: React 19, Zustand, React Flow, Vite
+- **Backend**: Go (net/http), sqlc, pgx/v5
+- **Database**: PostgreSQL 16 with RLS
+- **Migrations**: golang-migrate (raw SQL)

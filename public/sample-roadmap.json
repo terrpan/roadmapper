@@ -1,0 +1,169 @@
+{
+  "items": [
+    {
+      "id": "init-platform",
+      "title": "Platform Modernization",
+      "description": "Modernize the core platform infrastructure to support scalable microservices.",
+      "status": "in-progress",
+      "size": "quarters",
+      "dateRange": { "start": "2026-04-01", "end": "2026-12-31" },
+      "milestones": [
+        { "id": "ms-arch", "title": "Architecture approved", "completed": true },
+        { "id": "ms-mvp", "title": "MVP deployed", "completed": false }
+      ],
+      "position": { "x": 100, "y": 50 }
+    },
+    {
+      "id": "epic-auth",
+      "title": "Auth Service",
+      "description": "Build OAuth2/OIDC auth service with SSO support.",
+      "status": "in-progress",
+      "size": "months",
+      "dateRange": { "start": "2026-04-01", "end": "2026-07-31" },
+      "parentId": "init-platform",
+      "milestones": [
+        { "id": "ms-auth-design", "title": "Design complete", "completed": true },
+        { "id": "ms-auth-beta", "title": "Beta release", "completed": false }
+      ],
+      "position": { "x": 50, "y": 250 }
+    },
+    {
+      "id": "epic-api",
+      "title": "API Gateway",
+      "description": "Implement centralized API gateway with rate limiting and routing.",
+      "status": "planned",
+      "size": "months",
+      "dateRange": { "start": "2026-06-01", "end": "2026-09-30" },
+      "parentId": "init-platform",
+      "milestones": [
+        { "id": "ms-api-poc", "title": "POC validated", "completed": false }
+      ],
+      "position": { "x": 350, "y": 250 }
+    },
+    {
+      "id": "epic-monitoring",
+      "title": "Observability Stack",
+      "description": "Set up logging, metrics, and distributed tracing.",
+      "status": "backlog",
+      "size": "months",
+      "dateRange": { "start": "2026-08-01", "end": "2026-11-30" },
+      "parentId": "init-platform",
+      "milestones": [],
+      "position": { "x": 650, "y": 250 }
+    },
+    {
+      "id": "task-oauth",
+      "title": "OAuth2 Provider",
+      "description": "Implement OAuth2 authorization server with PKCE flow.",
+      "status": "in-progress",
+      "dateRange": { "start": "2026-04-01", "end": "2026-05-31" },
+      "parentId": "epic-auth",
+      "milestones": [],
+      "position": { "x": -50, "y": 450 }
+    },
+    {
+      "id": "task-sso",
+      "title": "SSO Integration",
+      "description": "Add SAML and OIDC SSO support for enterprise customers.",
+      "status": "planned",
+      "dateRange": { "start": "2026-06-01", "end": "2026-07-31" },
+      "parentId": "epic-auth",
+      "milestones": [],
+      "position": { "x": 200, "y": 450 }
+    },
+    {
+      "id": "task-rate-limit",
+      "title": "Rate Limiting",
+      "description": "Token-bucket rate limiter with per-tenant quotas.",
+      "status": "backlog",
+      "dateRange": { "start": "2026-06-01", "end": "2026-07-15" },
+      "parentId": "epic-api",
+      "milestones": [],
+      "position": { "x": 300, "y": 450 }
+    },
+    {
+      "id": "task-routing",
+      "title": "Service Routing",
+      "description": "Path-based routing with service discovery integration.",
+      "status": "backlog",
+      "dateRange": { "start": "2026-07-16", "end": "2026-09-30" },
+      "parentId": "epic-api",
+      "milestones": [],
+      "position": { "x": 500, "y": 450 }
+    },
+    {
+      "id": "task-logging",
+      "title": "Centralized Logging",
+      "description": "ELK-based logging pipeline with structured log ingestion.",
+      "status": "backlog",
+      "dateRange": { "start": "2026-08-01", "end": "2026-09-30" },
+      "parentId": "epic-monitoring",
+      "milestones": [],
+      "position": { "x": 600, "y": 450 }
+    },
+    {
+      "id": "task-tracing",
+      "title": "Distributed Tracing",
+      "description": "OpenTelemetry tracing across all microservices.",
+      "status": "backlog",
+      "dateRange": { "start": "2026-10-01", "end": "2026-11-30" },
+      "parentId": "epic-monitoring",
+      "milestones": [],
+      "position": { "x": 800, "y": 450 }
+    },
+    {
+      "id": "init-mobile",
+      "title": "Mobile App v2",
+      "description": "Rebuild mobile application with React Native for cross-platform support.",
+      "status": "planned",
+      "size": "quarters",
+      "dateRange": { "start": "2026-05-01", "end": "2026-10-31" },
+      "milestones": [
+        { "id": "ms-mobile-design", "title": "UX design finalized", "completed": false },
+        { "id": "ms-mobile-launch", "title": "App store launch", "completed": false }
+      ],
+      "position": { "x": 100, "y": 650 }
+    },
+    {
+      "id": "epic-mobile-core",
+      "title": "Core Navigation & Auth",
+      "description": "Implement app shell, navigation, and auth flows in React Native.",
+      "status": "planned",
+      "size": "months",
+      "dateRange": { "start": "2026-05-01", "end": "2026-07-31" },
+      "parentId": "init-mobile",
+      "milestones": [],
+      "position": { "x": 50, "y": 850 }
+    },
+    {
+      "id": "epic-mobile-offline",
+      "title": "Offline Support",
+      "description": "Add offline-first data sync with conflict resolution.",
+      "status": "backlog",
+      "size": "months",
+      "dateRange": { "start": "2026-08-01", "end": "2026-10-31" },
+      "parentId": "init-mobile",
+      "milestones": [],
+      "position": { "x": 350, "y": 850 }
+    }
+  ],
+  "connections": [
+    { "id": "conn-1", "sourceId": "init-platform", "targetId": "epic-auth", "type": "direct" },
+    { "id": "conn-2", "sourceId": "init-platform", "targetId": "epic-api", "type": "direct" },
+    { "id": "conn-3", "sourceId": "init-platform", "targetId": "epic-monitoring", "type": "direct" },
+    { "id": "conn-4", "sourceId": "epic-auth", "targetId": "task-oauth", "type": "direct" },
+    { "id": "conn-5", "sourceId": "epic-auth", "targetId": "task-sso", "type": "direct" },
+    { "id": "conn-6", "sourceId": "epic-api", "targetId": "task-rate-limit", "type": "direct" },
+    { "id": "conn-7", "sourceId": "epic-api", "targetId": "task-routing", "type": "direct" },
+    { "id": "conn-8", "sourceId": "epic-monitoring", "targetId": "task-logging", "type": "direct" },
+    { "id": "conn-9", "sourceId": "epic-monitoring", "targetId": "task-tracing", "type": "direct" },
+    { "id": "conn-10", "sourceId": "init-mobile", "targetId": "epic-mobile-core", "type": "direct" },
+    { "id": "conn-11", "sourceId": "init-mobile", "targetId": "epic-mobile-offline", "type": "direct" },
+    { "id": "conn-12", "sourceId": "task-oauth", "targetId": "task-sso", "type": "direct" },
+    { "id": "conn-13", "sourceId": "task-rate-limit", "targetId": "task-routing", "type": "direct" },
+    { "id": "conn-14", "sourceId": "task-logging", "targetId": "task-tracing", "type": "indirect" },
+    { "id": "conn-block-1", "sourceId": "epic-auth", "targetId": "epic-api", "type": "blocking" },
+    { "id": "conn-block-2", "sourceId": "epic-mobile-core", "targetId": "epic-mobile-offline", "type": "blocking" }
+  ],
+  "groups": []
+}

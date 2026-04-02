@@ -25,7 +25,7 @@ export interface RoadmapItem {
   position: { x: number; y: number };
 }
 
-export type ConnectionType = 'direct' | 'indirect';
+export type ConnectionType = 'direct' | 'indirect' | 'blocking';
 
 export interface Connection {
   id: string;
@@ -36,6 +36,24 @@ export interface Connection {
 }
 
 export type ViewMode = 'canvas' | 'kanban' | 'gantt';
+
+export const GROUP_COLORS = [
+  { bg: 'rgba(99,102,241,0.08)', border: '#6366f1', label: 'Indigo' },
+  { bg: 'rgba(236,72,153,0.08)', border: '#ec4899', label: 'Pink' },
+  { bg: 'rgba(234,179,8,0.08)', border: '#eab308', label: 'Yellow' },
+  { bg: 'rgba(34,197,94,0.08)', border: '#22c55e', label: 'Green' },
+  { bg: 'rgba(239,68,68,0.08)', border: '#ef4444', label: 'Red' },
+  { bg: 'rgba(168,85,247,0.08)', border: '#a855f7', label: 'Purple' },
+  { bg: 'rgba(14,165,233,0.08)', border: '#0ea5e9', label: 'Sky' },
+  { bg: 'rgba(249,115,22,0.08)', border: '#f97316', label: 'Orange' },
+] as const;
+
+export interface Group {
+  id: string;
+  label: string;
+  colorIndex: number; // index into GROUP_COLORS
+  itemIds: string[];
+}
 
 // Helper to format a date range for display based on size
 export function formatDateRange(size: InitiativeSize, range: DateRange): string {
@@ -95,13 +113,13 @@ export function isDateRangeWithin(child: DateRange, parent: DateRange): boolean 
 
 export function getDateRangeViolation(child: DateRange, parent: DateRange): string | null {
   if (child.start < parent.start && child.end > parent.end) {
-    return 'Both start and end dates fall outside the parent timeframe';
+    return `Child extends beyond parent on both ends — starts ${parent.start} vs ${child.start}, ends ${parent.end} vs ${child.end}`;
   }
   if (child.start < parent.start) {
-    return `Start date is before parent start (${parent.start})`;
+    return `Child starts earlier than parent (${child.start} is before parent start ${parent.start})`;
   }
   if (child.end > parent.end) {
-    return `End date is after parent end (${parent.end})`;
+    return `Child ends later than parent (${child.end} is after parent end ${parent.end})`;
   }
   return null;
 }
