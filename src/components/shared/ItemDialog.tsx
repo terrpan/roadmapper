@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useRoadmapStore } from '../../store/roadmapStore';
 import type { ItemStatus, InitiativeSize, DateRange } from '../../types';
-import { getDescendantIds, getItemDepth, getHierarchyLabel, getDateRangeViolation, computeEffectiveDateRange, getItemChildren, formatDateRange } from '../../types';
+import { getDescendantIds, getItemDepth, getHierarchyLabel, getDateRangeViolation, computeEffectiveDateRange, getItemChildren, formatDateRange, ItemFormSchema } from '../../types';
 
 const STATUSES: { value: ItemStatus; label: string }[] = [
   { value: 'backlog', label: 'Backlog' },
@@ -161,6 +161,7 @@ export function ItemDialog() {
   const [endYear, setEndYear] = useState(String(new Date().getFullYear()));
   const [endQuarter, setEndQuarter] = useState('1');
   const [dateWarning, setDateWarning] = useState<string | null>(null);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   const resetDateFields = () => {
     setStartDate('');
@@ -196,6 +197,7 @@ export function ItemDialog() {
       setParentId(parentForNewItem ?? scopeItemId ?? '');
       resetDateFields();
     }
+    setFormErrors({});
   }, [editingItem, dialogOpen, scopeItemId, parentForNewItem]);
 
   const parentItem = parentId ? items.find((i) => i.id === parentId) : null;
@@ -234,29 +236,52 @@ export function ItemDialog() {
   };
 
   const handleSave = () => {
-    if (!title.trim()) return false;
-
     const dateRange = buildDateRange(size, startDate, endDate, startYear, startQuarter, endYear, endQuarter);
 
-    if (parentDateRange && dateRange) {
-      const violation = getDateRangeViolation(dateRange, parentDateRange);
+    const result = ItemFormSchema.safeParse({
+      title,
+      description,
+      status,
+      size: size || undefined,
+      dateRange,
+      parentId: parentId || undefined,
+    });
+
+    if (!result.success) {
+      const errors: Record<string, string> = {};
+      for (const issue of result.error.issues) {
+        const key = issue.path[0]?.toString() ?? 'form';
+        if (!errors[key]) errors[key] = issue.message;
+      }
+      setFormErrors(errors);
+      return false;
+    }
+
+    setFormErrors({});
+    const validated = result.data;
+
+    // Date range validation against parent (business rule, not schema concern)
+    if (parentDateRange && validated.dateRange) {
+      const violation = getDateRangeViolation(validated.dateRange, parentDateRange);
       if (violation) {
         setDateWarning(violation);
         return false;
       }
     }
 
+    const cleanSize = validated.size === '' ? undefined : validated.size;
+
     if (editingItem) {
       updateItem(editingItem.id, {
-        title: title.trim(),
-        description: description.trim(),
-        status,
-        size: size || undefined,
-        dateRange,
-        parentId: parentId || undefined,
+        title: validated.title,
+        description: validated.description,
+        status: validated.status,
+        size: cleanSize,
+        dateRange: validated.dateRange,
+        parentId: validated.parentId,
       });
     } else {
-      addItem(title.trim(), description.trim(), status, undefined, size || undefined, dateRange, parentId || undefined);
+      addItem(validated.title, validated.description, validated.status, undefined, cleanSize, validated.dateRange, validated.parentId);
     }
     return true;
   };
@@ -270,6 +295,7 @@ export function ItemDialog() {
 
   const handleCreateAnother = () => {
     if (!handleSave()) return;
+    setFormErrors({});
     // Re-establish parent context so next item also gets connection + positioning
     const savedParentId = parentId;
     const savedDirection = directionForNewItem;
@@ -428,11 +454,14 @@ export function ItemDialog() {
             <input
               type="text"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => { setTitle(e.target.value); setFormErrors((prev) => { const { title: _, ...rest } = prev; return rest; }); }}
               autoFocus
               placeholder="e.g. Implement authentication"
-              className={inputClass}
+              className={`${inputClass}${formErrors.title ? ' border-red-500' : ''}`}
             />
+            {formErrors.title && (
+              <p className="text-xs text-red-600 mt-1">{formErrors.title}</p>
+            )}
           </div>
 
           <div>

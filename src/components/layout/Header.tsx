@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import type { ViewMode } from '../../types';
+import { ImportDataSchema } from '../../types';
 import { useRoadmapStore } from '../../store/roadmapStore';
 import { exportCanvasToPdf } from '../../lib/exportPdf';
 
@@ -83,13 +84,14 @@ export function Header() {
       const reader = new FileReader();
       reader.onload = (ev) => {
         try {
-          const data = JSON.parse(ev.target?.result as string);
-          if (!data.items || !Array.isArray(data.items)) {
-            alert('Invalid roadmap JSON: must contain an "items" array.');
+          const raw = JSON.parse(ev.target?.result as string);
+          const result = ImportDataSchema.safeParse(raw);
+          if (!result.success) {
+            const messages = result.error.issues.map((i) => i.message).join('\n');
+            alert(`Invalid roadmap JSON:\n${messages}`);
             return;
           }
-          if (!data.connections) data.connections = [];
-          importData(data, mode);
+          importData(result.data, mode);
         } catch {
           alert('Failed to parse JSON file.');
         }
@@ -105,8 +107,13 @@ export function Header() {
       setImportMenuOpen(false);
       try {
         const resp = await fetch(`${import.meta.env.BASE_URL}sample-roadmap.json`);
-        const data = await resp.json();
-        importData(data, mode);
+        const raw = await resp.json();
+        const result = ImportDataSchema.safeParse(raw);
+        if (!result.success) {
+          alert('Invalid sample roadmap data.');
+          return;
+        }
+        importData(result.data, mode);
       } catch {
         alert('Failed to load sample roadmap.');
       }

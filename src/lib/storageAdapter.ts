@@ -1,10 +1,6 @@
-import type { RoadmapItem, Connection, Group, Milestone } from '../types';
+import type { RoadmapItem, Connection, Group, Milestone, RoadmapData } from '../types';
 
-export interface RoadmapData {
-  items: RoadmapItem[];
-  connections: Connection[];
-  groups: Group[];
-}
+export type { RoadmapData };
 
 /**
  * StorageAdapter abstracts persistence so the app can work in both

@@ -1,41 +1,40 @@
-export type ItemStatus = 'backlog' | 'planned' | 'in-progress' | 'done';
+// Re-export all types from Zod schemas (single source of truth)
+export type {
+  ItemStatus,
+  InitiativeSize,
+  ConnectionType,
+  ViewMode,
+  DateRange,
+  Milestone,
+  RoadmapItem,
+  Connection,
+  Group,
+  RoadmapData,
+  Position,
+  ItemFormData,
+} from './schemas';
 
-export type InitiativeSize = 'weeks' | 'months' | 'quarters' | 'years';
+// Import types locally for use in helper functions below
+import type { InitiativeSize, DateRange, RoadmapItem } from './schemas';
 
-export interface DateRange {
-  start: string; // ISO date string (YYYY-MM-DD)
-  end: string;   // ISO date string (YYYY-MM-DD)
-}
-
-export interface Milestone {
-  id: string;
-  title: string;
-  completed: boolean;
-}
-
-export interface RoadmapItem {
-  id: string;
-  title: string;
-  description: string;
-  status: ItemStatus;
-  size?: InitiativeSize;
-  dateRange?: DateRange;
-  parentId?: string;
-  milestones: Milestone[];
-  position: { x: number; y: number };
-}
-
-export type ConnectionType = 'direct' | 'indirect' | 'blocking';
-
-export interface Connection {
-  id: string;
-  sourceId: string;
-  targetId: string;
-  label?: string;
-  type?: ConnectionType;
-}
-
-export type ViewMode = 'canvas' | 'kanban' | 'gantt';
+// Re-export schemas for runtime validation
+export {
+  ItemStatusSchema,
+  InitiativeSizeSchema,
+  ConnectionTypeSchema,
+  ViewModeSchema,
+  PositionSchema,
+  DateRangeSchema,
+  MilestoneSchema,
+  RoadmapItemSchema,
+  ConnectionSchema,
+  GroupSchema,
+  RoadmapDataSchema,
+  StatusUpdateResponseSchema,
+  HealthResponseSchema,
+  ItemFormSchema,
+  ImportDataSchema,
+} from './schemas';
 
 export const GROUP_COLORS = [
   { bg: 'rgba(99,102,241,0.08)', border: '#6366f1', label: 'Indigo' },
@@ -47,13 +46,6 @@ export const GROUP_COLORS = [
   { bg: 'rgba(14,165,233,0.08)', border: '#0ea5e9', label: 'Sky' },
   { bg: 'rgba(249,115,22,0.08)', border: '#f97316', label: 'Orange' },
 ] as const;
-
-export interface Group {
-  id: string;
-  label: string;
-  colorIndex: number; // index into GROUP_COLORS
-  itemIds: string[];
-}
 
 // Helper to format a date range for display based on size
 export function formatDateRange(size: InitiativeSize, range: DateRange): string {
