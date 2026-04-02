@@ -23,6 +23,13 @@ function parseResponse<T>(schema: z.ZodType<T>, data: unknown): T {
 
 const BASE_URL = import.meta.env.VITE_API_URL || '';
 
+// Token provider for Clerk auth — set by the React app when in API mode
+let _getToken: (() => Promise<string | null>) | null = null;
+
+export function setTokenProvider(provider: (() => Promise<string | null>) | null) {
+  _getToken = provider;
+}
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -34,12 +41,23 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${BASE_URL}${path}`;
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options?.headers as Record<string, string>),
+  };
+
+  // Add auth token if provider is set (API mode with Clerk)
+  if (_getToken) {
+    const token = await _getToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+
   const res = await fetch(url, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
+    headers,
   });
 
   if (!res.ok) {

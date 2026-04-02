@@ -12,6 +12,7 @@
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
+    "@clerk/react": "^6.1.4",
     "@hello-pangea/dnd": "^18.0.1",
     "@tailwindcss/vite": "^4.2.2",
     "@xyflow/react": "^12.10.2",
@@ -20,6 +21,7 @@
     "nanoid": "^5.1.7",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "react-router-dom": "^7.13.2",
     "tailwindcss": "^4.2.2",
     "zod": "^4.3.6",
     "zustand": "^5.0.12"

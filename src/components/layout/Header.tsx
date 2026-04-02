@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { UserButton, OrganizationSwitcher } from '@clerk/react';
 import type { ViewMode } from '../../types';
 import { ImportDataSchema } from '../../types';
 import { useRoadmapStore } from '../../store/roadmapStore';
 import { exportCanvasToPdf } from '../../lib/exportPdf';
+import { getStorageAdapter } from '../../lib/storageAdapter';
 
 export function Header() {
   const viewMode = useRoadmapStore((s) => s.viewMode);
@@ -161,6 +163,17 @@ export function Header() {
         </div>
       </div>
       <div className="flex items-center gap-2">
+        {getStorageAdapter().mode === 'api' && (
+          <>
+            <OrganizationSwitcher
+              hidePersonal={true}
+              afterSelectOrganizationUrl="/"
+              afterCreateOrganizationUrl="/"
+            />
+            <UserButton />
+            <div className="w-px h-6 bg-gray-200" />
+          </>
+        )}
         <div
           className={`flex items-center rounded-lg border transition-all ${
             searchQuery
