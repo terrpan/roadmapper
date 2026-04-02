@@ -3,9 +3,12 @@ package middleware
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 
+	"github.com/clerk/clerk-sdk-go/v2"
+	clerkhttp "github.com/clerk/clerk-sdk-go/v2/http"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -22,23 +25,49 @@ func TenantFromContext(ctx context.Context) string {
 	return ""
 }
 
-// TenantMiddleware extracts the tenant ID from the X-Tenant-ID header
-// (or falls back to DEFAULT_TENANT_ID env var) and stores it in the request context.
-func TenantMiddleware(next http.Handler) http.Handler {
-	defaultTenantID := os.Getenv("DEFAULT_TENANT_ID")
-	if defaultTenantID == "" {
-		defaultTenantID = "00000000-0000-0000-0000-000000000001"
+// ClerkAuthMiddleware verifies the Clerk JWT from the Authorization header,
+// extracts the active organization ID as the tenant, auto-creates the tenant
+// record if needed, and stores the tenant ID in the request context.
+func ClerkAuthMiddleware(pool *pgxpool.Pool) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		clerkMiddleware := clerkhttp.WithHeaderAuthorization()
+		return clerkMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			claims, ok := clerk.SessionClaimsFromContext(r.Context())
+			if !ok {
+				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+				return
+			}
+
+			orgID := claims.ActiveOrganizationID
+			if orgID == "" {
+				defaultTenantID := os.Getenv("DEFAULT_TENANT_ID")
+				if defaultTenantID != "" {
+					orgID = defaultTenantID
+				} else {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusForbidden)
+					w.Write([]byte(`{"error":"No active organization. Please select an organization."}`))
+					return
+				}
+			}
+
+			if err := ensureTenant(r.Context(), pool, orgID); err != nil {
+				log.Printf("Failed to ensure tenant %s: %v", orgID, err)
+			}
+
+			ctx := context.WithValue(r.Context(), tenantIDKey, orgID)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		}))
 	}
+}
 
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tenantID := r.Header.Get("X-Tenant-ID")
-		if tenantID == "" {
-			tenantID = defaultTenantID
-		}
-
-		ctx := context.WithValue(r.Context(), tenantIDKey, tenantID)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+// ensureTenant idempotently creates a tenant record if one does not exist.
+func ensureTenant(ctx context.Context, pool *pgxpool.Pool, tenantID string) error {
+	_, err := pool.Exec(ctx,
+		`INSERT INTO tenants (id, name, slug) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING`,
+		tenantID, tenantID, tenantID,
+	)
+	return err
 }
 
 // WithTenant wraps a pgx transaction callback to SET LOCAL the tenant ID for RLS.

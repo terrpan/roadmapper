@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 
+	"github.com/clerk/clerk-sdk-go/v2"
 	"github.com/danielterry/roadmapper/api/internal/handler"
 	"github.com/danielterry/roadmapper/api/internal/middleware"
 	"github.com/golang-migrate/migrate/v4"
@@ -43,6 +45,15 @@ func New(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
+	// Initialize Clerk
+	clerkSecretKey := os.Getenv("CLERK_SECRET_KEY")
+	if clerkSecretKey != "" {
+		clerk.SetKey(clerkSecretKey)
+		log.Println("Clerk authentication enabled")
+	} else {
+		log.Println("WARNING: CLERK_SECRET_KEY not set — auth middleware will reject all requests")
+	}
+
 	s := &Server{
 		cfg:  cfg,
 		pool: pool,
@@ -69,51 +80,60 @@ func (s *Server) Shutdown(ctx context.Context) error {
 func (s *Server) routes() http.Handler {
 	mux := http.NewServeMux()
 
-	// Health check (no tenant middleware needed)
+	// Health check — public, no auth needed
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"ok"}`))
 	})
 
+	// --- Protected routes (all need auth + tenant) ---
+	protected := http.NewServeMux()
+
 	importExport := handler.NewImportExportHandler(s.pool)
-	mux.HandleFunc("GET /api/export", importExport.Export)
-	mux.HandleFunc("POST /api/import", importExport.Import)
+	protected.HandleFunc("GET /api/export", importExport.Export)
+	protected.HandleFunc("POST /api/import", importExport.Import)
 
 	items := handler.NewItemHandler(s.pool)
-	mux.HandleFunc("GET /api/items", items.List)
-	mux.HandleFunc("GET /api/items/{id}", items.Get)
-	mux.HandleFunc("POST /api/items", items.Create)
-	mux.HandleFunc("PUT /api/items/{id}", items.Update)
-	mux.HandleFunc("DELETE /api/items/{id}", items.Delete)
-	mux.HandleFunc("PATCH /api/items/{id}/position", items.UpdatePosition)
-	mux.HandleFunc("PATCH /api/items/{id}/status", items.UpdateStatus)
-	mux.HandleFunc("POST /api/items/batch-positions", items.BatchUpdatePositions)
+	protected.HandleFunc("GET /api/items", items.List)
+	protected.HandleFunc("GET /api/items/{id}", items.Get)
+	protected.HandleFunc("POST /api/items", items.Create)
+	protected.HandleFunc("PUT /api/items/{id}", items.Update)
+	protected.HandleFunc("DELETE /api/items/{id}", items.Delete)
+	protected.HandleFunc("PATCH /api/items/{id}/position", items.UpdatePosition)
+	protected.HandleFunc("PATCH /api/items/{id}/status", items.UpdateStatus)
+	protected.HandleFunc("POST /api/items/batch-positions", items.BatchUpdatePositions)
 
 	groups := handler.NewGroupHandler(s.pool)
-	mux.HandleFunc("GET /api/groups", groups.List)
-	mux.HandleFunc("GET /api/groups/{id}", groups.Get)
-	mux.HandleFunc("POST /api/groups", groups.Create)
-	mux.HandleFunc("PUT /api/groups/{id}", groups.Update)
-	mux.HandleFunc("DELETE /api/groups/{id}", groups.Delete)
-	mux.HandleFunc("POST /api/groups/{id}/items", groups.AddItems)
-	mux.HandleFunc("DELETE /api/groups/{id}/items/{itemId}", groups.RemoveItem)
+	protected.HandleFunc("GET /api/groups", groups.List)
+	protected.HandleFunc("GET /api/groups/{id}", groups.Get)
+	protected.HandleFunc("POST /api/groups", groups.Create)
+	protected.HandleFunc("PUT /api/groups/{id}", groups.Update)
+	protected.HandleFunc("DELETE /api/groups/{id}", groups.Delete)
+	protected.HandleFunc("POST /api/groups/{id}/items", groups.AddItems)
+	protected.HandleFunc("DELETE /api/groups/{id}/items/{itemId}", groups.RemoveItem)
 
 	milestones := handler.NewMilestoneHandler(s.pool)
-	mux.HandleFunc("GET /api/items/{itemId}/milestones", milestones.List)
-	mux.HandleFunc("POST /api/items/{itemId}/milestones", milestones.Create)
-	mux.HandleFunc("PUT /api/milestones/{id}", milestones.Toggle)
-	mux.HandleFunc("DELETE /api/milestones/{id}", milestones.Delete)
+	protected.HandleFunc("GET /api/items/{itemId}/milestones", milestones.List)
+	protected.HandleFunc("POST /api/items/{itemId}/milestones", milestones.Create)
+	protected.HandleFunc("PUT /api/milestones/{id}", milestones.Toggle)
+	protected.HandleFunc("DELETE /api/milestones/{id}", milestones.Delete)
 
 	connections := handler.NewConnectionHandler(s.pool)
-	mux.HandleFunc("GET /api/connections", connections.List)
-	mux.HandleFunc("GET /api/connections/{id}", connections.Get)
-	mux.HandleFunc("POST /api/connections", connections.Create)
-	mux.HandleFunc("PUT /api/connections/{id}", connections.Update)
-	mux.HandleFunc("DELETE /api/connections/{id}", connections.Delete)
+	protected.HandleFunc("GET /api/connections", connections.List)
+	protected.HandleFunc("GET /api/connections/{id}", connections.Get)
+	protected.HandleFunc("POST /api/connections", connections.Create)
+	protected.HandleFunc("PUT /api/connections/{id}", connections.Update)
+	protected.HandleFunc("DELETE /api/connections/{id}", connections.Delete)
 
-	// Apply middleware: CORS → Tenant → routes
+	// Apply Clerk auth middleware to protected routes
+	var protectedHandler http.Handler = protected
+	protectedHandler = middleware.ClerkAuthMiddleware(s.pool)(protectedHandler)
+
+	// Mount protected routes on the main mux
+	mux.Handle("/api/", protectedHandler)
+
+	// Apply CORS to everything
 	var handler http.Handler = mux
-	handler = middleware.TenantMiddleware(handler)
 	handler = middleware.CORS(handler)
 	return handler
 }
