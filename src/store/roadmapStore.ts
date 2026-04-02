@@ -265,7 +265,7 @@ export const useRoadmapStore = create<RoadmapStore>((set, get) => ({
     }),
 
   updateItemPosition: (id, position) => {
-    syncToAdapter(async (adapter) => { await adapter.updateItemPosition(id, position); });
+    // Local-only update — no API call. Use batchUpdatePositions to persist.
     set((state) => ({
       items: state.items.map((item) => (item.id === id ? { ...item, position } : item)),
     }));
