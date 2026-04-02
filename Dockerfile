@@ -2,6 +2,10 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
 
+# Build args for Vite env vars (baked in at build time)
+ARG VITE_CLERK_PUBLISHABLE_KEY
+ENV VITE_CLERK_PUBLISHABLE_KEY=$VITE_CLERK_PUBLISHABLE_KEY
+
 # Copy package files
 COPY package*.json ./
 

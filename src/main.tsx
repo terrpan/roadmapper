@@ -86,7 +86,11 @@ function Root() {
   }
 
   return (
-    <ClerkProvider publishableKey={clerkPubKey}>
+    <ClerkProvider
+      publishableKey={clerkPubKey}
+      signInUrl="/sign-in"
+      signUpUrl="/sign-up"
+    >
       <TokenSync />
       <BrowserRouter>
         <Routes>
