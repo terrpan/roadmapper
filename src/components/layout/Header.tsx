@@ -104,7 +104,7 @@ export function Header() {
     async (mode: 'replace' | 'merge') => {
       setImportMenuOpen(false);
       try {
-        const resp = await fetch('/sample-roadmap.json');
+        const resp = await fetch(`${import.meta.env.BASE_URL}sample-roadmap.json`);
         const data = await resp.json();
         importData(data, mode);
       } catch {
