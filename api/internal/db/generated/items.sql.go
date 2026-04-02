@@ -33,7 +33,7 @@ RETURNING id, tenant_id, title, description, status, size, date_start, date_end,
 
 type CreateItemParams struct {
 	ID          string             `json:"id"`
-	TenantID    pgtype.UUID        `json:"tenant_id"`
+	TenantID    string             `json:"tenant_id"`
 	Title       string             `json:"title"`
 	Description string             `json:"description"`
 	Status      ItemStatus         `json:"status"`

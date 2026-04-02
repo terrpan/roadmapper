@@ -7,8 +7,6 @@ package db
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createMilestone = `-- name: CreateMilestone :one
@@ -18,12 +16,12 @@ RETURNING id, tenant_id, item_id, title, completed, sort_order, created_at
 `
 
 type CreateMilestoneParams struct {
-	ID        string      `json:"id"`
-	TenantID  pgtype.UUID `json:"tenant_id"`
-	ItemID    string      `json:"item_id"`
-	Title     string      `json:"title"`
-	Completed bool        `json:"completed"`
-	SortOrder int32       `json:"sort_order"`
+	ID        string `json:"id"`
+	TenantID  string `json:"tenant_id"`
+	ItemID    string `json:"item_id"`
+	Title     string `json:"title"`
+	Completed bool   `json:"completed"`
+	SortOrder int32  `json:"sort_order"`
 }
 
 func (q *Queries) CreateMilestone(ctx context.Context, arg CreateMilestoneParams) (Milestone, error) {

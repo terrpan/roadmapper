@@ -7,7 +7,6 @@ import (
 	db "github.com/danielterry/roadmapper/api/internal/db/generated"
 	"github.com/danielterry/roadmapper/api/internal/middleware"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -107,9 +106,8 @@ func (h *GroupHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tenantID := middleware.TenantFromContext(r.Context())
-	var tenantUUID pgtype.UUID
-	if err := tenantUUID.Scan(tenantID); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid tenant ID")
+	if tenantID == "" {
+		writeError(w, http.StatusBadRequest, "missing tenant ID")
 		return
 	}
 
@@ -118,7 +116,7 @@ func (h *GroupHandler) Create(w http.ResponseWriter, r *http.Request) {
 		q := db.New(tx)
 		g, err := q.CreateGroup(r.Context(), db.CreateGroupParams{
 			ID:         req.ID,
-			TenantID:   tenantUUID,
+			TenantID:   tenantID,
 			Label:      req.Label,
 			ColorIndex: req.ColorIndex,
 		})
@@ -130,7 +128,7 @@ func (h *GroupHandler) Create(w http.ResponseWriter, r *http.Request) {
 			if err := q.AddItemToGroup(r.Context(), db.AddItemToGroupParams{
 				GroupID:  g.ID,
 				ItemID:   itemID,
-				TenantID: tenantUUID,
+				TenantID: tenantID,
 			}); err != nil {
 				return err
 			}
@@ -220,9 +218,8 @@ func (h *GroupHandler) AddItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tenantID := middleware.TenantFromContext(r.Context())
-	var tenantUUID pgtype.UUID
-	if err := tenantUUID.Scan(tenantID); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid tenant ID")
+	if tenantID == "" {
+		writeError(w, http.StatusBadRequest, "missing tenant ID")
 		return
 	}
 
@@ -239,7 +236,7 @@ func (h *GroupHandler) AddItems(w http.ResponseWriter, r *http.Request) {
 			if err := q.AddItemToGroup(r.Context(), db.AddItemToGroupParams{
 				GroupID:  g.ID,
 				ItemID:   itemID,
-				TenantID: tenantUUID,
+				TenantID: tenantID,
 			}); err != nil {
 				return err
 			}

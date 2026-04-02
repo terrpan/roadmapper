@@ -7,8 +7,6 @@ package db
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const addItemToGroup = `-- name: AddItemToGroup :exec
@@ -16,9 +14,9 @@ INSERT INTO group_items (group_id, item_id, tenant_id) VALUES ($1, $2, $3) ON CO
 `
 
 type AddItemToGroupParams struct {
-	GroupID  string      `json:"group_id"`
-	ItemID   string      `json:"item_id"`
-	TenantID pgtype.UUID `json:"tenant_id"`
+	GroupID  string `json:"group_id"`
+	ItemID   string `json:"item_id"`
+	TenantID string `json:"tenant_id"`
 }
 
 func (q *Queries) AddItemToGroup(ctx context.Context, arg AddItemToGroupParams) error {
@@ -33,10 +31,10 @@ RETURNING id, tenant_id, label, color_index, created_at, updated_at
 `
 
 type CreateGroupParams struct {
-	ID         string      `json:"id"`
-	TenantID   pgtype.UUID `json:"tenant_id"`
-	Label      string      `json:"label"`
-	ColorIndex int32       `json:"color_index"`
+	ID         string `json:"id"`
+	TenantID   string `json:"tenant_id"`
+	Label      string `json:"label"`
+	ColorIndex int32  `json:"color_index"`
 }
 
 func (q *Queries) CreateGroup(ctx context.Context, arg CreateGroupParams) (Group, error) {

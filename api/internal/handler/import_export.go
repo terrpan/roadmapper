@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	db "github.com/danielterry/roadmapper/api/internal/db/generated"
@@ -138,13 +137,13 @@ func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tenantID, err := parseTenantUUID(middleware.TenantFromContext(r.Context()))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid tenant ID")
+	tenantID := middleware.TenantFromContext(r.Context())
+	if tenantID == "" {
+		writeError(w, http.StatusBadRequest, "missing tenant ID")
 		return
 	}
 
-	err = middleware.WithTenant(r.Context(), h.pool, func(tx pgx.Tx) error {
+	err := middleware.WithTenant(r.Context(), h.pool, func(tx pgx.Tx) error {
 		q := db.New(tx)
 
 		if req.Mode == "replace" {
@@ -248,7 +247,7 @@ func sortItemsParentsFirst(items []importItem) []importItem {
 	return sorted
 }
 
-func insertItems(ctx context.Context, q *db.Queries, tenantID pgtype.UUID, items []importItem, mode string) error {
+func insertItems(ctx context.Context, q *db.Queries, tenantID string, items []importItem, mode string) error {
 	items = sortItemsParentsFirst(items)
 
 	existingSet := make(map[string]struct{})
@@ -306,7 +305,7 @@ func insertItems(ctx context.Context, q *db.Queries, tenantID pgtype.UUID, items
 	return nil
 }
 
-func insertConnections(ctx context.Context, q *db.Queries, tenantID pgtype.UUID, connections []importConnection, mode string) error {
+func insertConnections(ctx context.Context, q *db.Queries, tenantID string, connections []importConnection, mode string) error {
 	existingSet := make(map[string]struct{})
 	if mode == "merge" {
 		existing, err := q.ListConnections(ctx)
@@ -339,7 +338,7 @@ func insertConnections(ctx context.Context, q *db.Queries, tenantID pgtype.UUID,
 	return nil
 }
 
-func insertGroups(ctx context.Context, q *db.Queries, tenantID pgtype.UUID, groups []importGroup, mode string) error {
+func insertGroups(ctx context.Context, q *db.Queries, tenantID string, groups []importGroup, mode string) error {
 	existingSet := make(map[string]struct{})
 	if mode == "merge" {
 		existing, err := q.ListGroups(ctx)

@@ -19,7 +19,7 @@ RETURNING id, tenant_id, source_id, target_id, label, type, created_at
 
 type CreateConnectionParams struct {
 	ID       string         `json:"id"`
-	TenantID pgtype.UUID    `json:"tenant_id"`
+	TenantID string         `json:"tenant_id"`
 	SourceID string         `json:"source_id"`
 	TargetID string         `json:"target_id"`
 	Label    pgtype.Text    `json:"label"`

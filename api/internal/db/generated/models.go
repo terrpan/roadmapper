@@ -144,7 +144,7 @@ func (ns NullItemStatus) Value() (driver.Value, error) {
 
 type Connection struct {
 	ID        string             `json:"id"`
-	TenantID  pgtype.UUID        `json:"tenant_id"`
+	TenantID  string             `json:"tenant_id"`
 	SourceID  string             `json:"source_id"`
 	TargetID  string             `json:"target_id"`
 	Label     pgtype.Text        `json:"label"`
@@ -154,7 +154,7 @@ type Connection struct {
 
 type Group struct {
 	ID         string             `json:"id"`
-	TenantID   pgtype.UUID        `json:"tenant_id"`
+	TenantID   string             `json:"tenant_id"`
 	Label      string             `json:"label"`
 	ColorIndex int32              `json:"color_index"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
@@ -162,14 +162,14 @@ type Group struct {
 }
 
 type GroupItem struct {
-	GroupID  string      `json:"group_id"`
-	ItemID   string      `json:"item_id"`
-	TenantID pgtype.UUID `json:"tenant_id"`
+	GroupID  string `json:"group_id"`
+	ItemID   string `json:"item_id"`
+	TenantID string `json:"tenant_id"`
 }
 
 type Item struct {
 	ID          string             `json:"id"`
-	TenantID    pgtype.UUID        `json:"tenant_id"`
+	TenantID    string             `json:"tenant_id"`
 	Title       string             `json:"title"`
 	Description string             `json:"description"`
 	Status      ItemStatus         `json:"status"`
@@ -185,7 +185,7 @@ type Item struct {
 
 type Milestone struct {
 	ID        string             `json:"id"`
-	TenantID  pgtype.UUID        `json:"tenant_id"`
+	TenantID  string             `json:"tenant_id"`
 	ItemID    string             `json:"item_id"`
 	Title     string             `json:"title"`
 	Completed bool               `json:"completed"`
@@ -194,7 +194,7 @@ type Milestone struct {
 }
 
 type Tenant struct {
-	ID        pgtype.UUID        `json:"id"`
+	ID        string             `json:"id"`
 	Name      string             `json:"name"`
 	Slug      string             `json:"slug"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`

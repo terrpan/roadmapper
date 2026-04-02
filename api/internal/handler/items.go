@@ -90,12 +90,6 @@ type batchPositionEntry struct {
 
 // --- Converters ---
 
-func parseTenantUUID(tenantID string) (pgtype.UUID, error) {
-	var uuid pgtype.UUID
-	err := uuid.Scan(tenantID)
-	return uuid, err
-}
-
 func textFromPtr(s *string) pgtype.Text {
 	if s == nil {
 		return pgtype.Text{}
@@ -239,9 +233,9 @@ func (h *ItemHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tenantID, err := parseTenantUUID(middleware.TenantFromContext(r.Context()))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid tenant ID")
+	tenantID := middleware.TenantFromContext(r.Context())
+	if tenantID == "" {
+		writeError(w, http.StatusBadRequest, "missing tenant ID")
 		return
 	}
 

@@ -78,15 +78,15 @@ func (h *MilestoneHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tenantID, err := parseTenantUUID(middleware.TenantFromContext(r.Context()))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid tenant ID")
+	tenantID := middleware.TenantFromContext(r.Context())
+	if tenantID == "" {
+		writeError(w, http.StatusBadRequest, "missing tenant ID")
 		return
 	}
 
 	var resp milestoneDetailResponse
 
-	err = middleware.WithTenant(r.Context(), h.pool, func(tx pgx.Tx) error {
+	err := middleware.WithTenant(r.Context(), h.pool, func(tx pgx.Tx) error {
 		q := db.New(tx)
 
 		maxOrder, err := q.GetMaxSortOrder(r.Context(), itemID)

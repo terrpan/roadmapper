@@ -132,9 +132,8 @@ func (h *ConnectionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tenantID := middleware.TenantFromContext(r.Context())
-	var uid pgtype.UUID
-	if err := uid.Scan(tenantID); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid tenant id")
+	if tenantID == "" {
+		writeError(w, http.StatusBadRequest, "missing tenant id")
 		return
 	}
 
@@ -158,7 +157,7 @@ func (h *ConnectionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		var err error
 		conn, err = q.CreateConnection(r.Context(), db.CreateConnectionParams{
 			ID:       req.ID,
-			TenantID: uid,
+			TenantID: tenantID,
 			SourceID: req.SourceID,
 			TargetID: req.TargetID,
 			Label:    label,
