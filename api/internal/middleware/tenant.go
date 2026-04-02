@@ -61,7 +61,7 @@ func WithTenant(ctx context.Context, pool *pgxpool.Pool, fn func(tx pgx.Tx) erro
 	defer tx.Rollback(ctx)
 
 	// Set the RLS session variable for this transaction
-	if _, err := tx.Exec(ctx, "SET LOCAL app.current_tenant_id = $1", tenantID); err != nil {
+	if _, err := tx.Exec(ctx, fmt.Sprintf("SET LOCAL app.current_tenant_id = '%s'", tenantID)); err != nil {
 		return fmt.Errorf("set tenant context: %w", err)
 	}
 
