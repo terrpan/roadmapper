@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:16
+    image: dhi.io/postgres:16
     container_name: roadmapper-db
     env_file:
       - .env

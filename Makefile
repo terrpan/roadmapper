@@ -1,4 +1,4 @@
-.PHONY: dev dev-static db-up db-down migrate-up migrate-down migrate-create sqlc api-build api-run test
+.PHONY: dev dev-static db-up db-down migrate-up migrate-down migrate-create sqlc api-build api-run test test-e2e test-e2e-ui
 
 # Full-stack development (DB + API + Frontend)
 dev: db-up api-run-bg
@@ -49,6 +49,13 @@ api-run-bg:
 # Tests
 test:
 	cd api && go test ./...
+
+# E2E Tests
+test-e2e:
+	npx playwright test
+
+test-e2e-ui:
+	npx playwright test --ui
 
 # Clean
 clean:
